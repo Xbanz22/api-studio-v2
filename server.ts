@@ -305,6 +305,7 @@ const securitySettings = {
     '/api/tools/netflix': 'Free',
     '/api/tools/tiktok': 'Free',
     '/api/tools/tiktokdl': 'Free',
+    '/api/tools/alightmotion': 'Free',
     '/api/tools/stalktiktok': 'Free',
     '/api/tools/ttstalk': 'Free',
     '/api/data/users': 'Free',
@@ -3349,6 +3350,88 @@ Anda dapat membuat endpoint REST kustom (\`/api/m/*\`) langsung dari browser:
 
   app.get(['/api/tools/tiktok', '/api/tools/tiktokdl'], handleTikTokDownloader);
   app.post(['/api/tools/tiktok', '/api/tools/tiktokdl'], handleTikTokDownloader);
+
+  // GET & POST /api/tools/alightmotion - AlightMotion Premium Generator (magic link)
+  const handleAlightMotion = async (req: express.Request, res: express.Response) => {
+    try {
+      const action = (req.query.action || req.body?.action || 'send_link').toString().trim().toLowerCase();
+      const email = (req.query.email || req.body?.email || '').toString().trim();
+      const magicLink = (req.query.magicLink || req.body?.magicLink || req.query.link || req.body?.link || '').toString().trim();
+
+      if (!email) {
+        return res.status(400).json({
+          success: false,
+          error: 'Parameter "email" wajib diisi. Contoh: /api/tools/alightmotion?action=send_link&email=kamu@example.com'
+        });
+      }
+
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return res.status(400).json({ success: false, error: 'Format email tidak valid.' });
+      }
+
+      const base = 'https://nyxieamprem.vercel.app';
+      let upstreamPath: string;
+      let payload: Record<string, string>;
+
+      if (action === 'send_link' || action === 'send') {
+        upstreamPath = '/api/send-link';
+        payload = { email };
+      } else if (action === 'verify_link' || action === 'verify') {
+        if (!magicLink) {
+          return res.status(400).json({
+            success: false,
+            error: 'Parameter "magicLink" wajib diisi untuk action=verify_link.'
+          });
+        }
+        upstreamPath = '/api/verify-link';
+        payload = { email, magicLink };
+      } else {
+        return res.status(400).json({
+          success: false,
+          error: 'Action tidak valid. Gunakan action=send_link atau action=verify_link.'
+        });
+      }
+
+      const upstreamRes = await fetch(`${base}${upstreamPath}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const rawText = await upstreamRes.text();
+      let data: any;
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        data = { raw: rawText };
+      }
+
+      if (!upstreamRes.ok) {
+        return res.status(upstreamRes.status).json({
+          success: false,
+          error: `Upstream HTTP ${upstreamRes.status}`,
+          upstream: data
+        });
+      }
+
+      return res.json({
+        success: true,
+        action,
+        email,
+        data,
+        upstream: `${base}${upstreamPath}`,
+        timestamp: new Date().toISOString()
+      });
+    } catch (err: any) {
+      return res.status(500).json({
+        success: false,
+        error: `Gagal memproses AlightMotion: ${err.message || err}`
+      });
+    }
+  };
+
+  app.get('/api/tools/alightmotion', handleAlightMotion);
+  app.post('/api/tools/alightmotion', handleAlightMotion);
 
   // GET & POST /api/tools/stalktiktok or /api/tools/ttstalk - TikTok Profile Stalker
   const scrapeTikTokStalk = async (usernameInput: string) => {

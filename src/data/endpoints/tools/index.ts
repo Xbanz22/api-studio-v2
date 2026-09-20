@@ -10,6 +10,7 @@ import { scrapeEndpoint } from './scrape';
 import { pinterestEndpoint } from './pinterest';
 import { nftokenEndpoint } from './nftoken';
 import { tiktokDownloaderEndpoint } from './tiktok';
+import { alightMotionEndpoint } from './alightmotion';
 
 export const toolsEndpoints: ApiEndpoint[] = [
   netflixEndpoint,
@@ -22,7 +23,8 @@ export const toolsEndpoints: ApiEndpoint[] = [
   scrapeEndpoint,
   pinterestEndpoint,
   nftokenEndpoint,
-  tiktokDownloaderEndpoint
+  tiktokDownloaderEndpoint,
+  alightMotionEndpoint
 ];
 
 export {
@@ -36,5 +38,6 @@ export {
   scrapeEndpoint,
   pinterestEndpoint,
   nftokenEndpoint,
-  tiktokDownloaderEndpoint
+  tiktokDownloaderEndpoint,
+  alightMotionEndpoint
 };
