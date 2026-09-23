@@ -17,6 +17,8 @@ export default defineConfig(() => {
       hmr: process.env.DISABLE_HMR !== 'true',
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      // Domain publik lewat Cloudflare Tunnel.
+      allowedHosts: ['baniw-space.my.id', 'api.baniw-space.my.id', 'web.baniw-space.my.id', 'localhost', '127.0.0.1'],
     },
   };
 });

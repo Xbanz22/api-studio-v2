@@ -873,6 +873,63 @@ var tiktokDownloaderEndpoint = {
   }
 };
 
+// src/data/endpoints/tools/alightmotion.ts
+var alightMotionEndpoint = {
+  id: "tools-alightmotion",
+  name: "AlightMotion Premium Generator",
+  nameId: "AlightMotion Premium Generator",
+  category: "tools",
+  method: "POST",
+  path: "/api/tools/alightmotion",
+  summary: "Send & verify Alight Motion magic link to unlock premium features",
+  summaryId: "Kirim dan verifikasi magic link Alight Motion untuk membuka fitur premium",
+  description: "Proxies the AlightMotion Premium Generator API. Two actions: send_link (sends a magic link to the email) and verify_link (redeems the magic link for premium access). The magic link is sent to the inbox/spam folder after calling send_link.",
+  descriptionId: "Jembatan ke API AlightMotion Premium Generator. Dua aksi: send_link (mengirim magic link ke email) dan verify_link (menukar magic link untuk akses premium). Magic link dikirim ke inbox/folder spam setelah memanggil send_link.",
+  tags: ["Tools", "AlightMotion", "Premium", "MagicLink", "VideoEditing"],
+  queryParams: [
+    {
+      name: "action",
+      type: "enum",
+      required: true,
+      defaultValue: "send_link",
+      options: ["send_link", "verify_link"],
+      description: "Action mode: send_link (email the magic link) or verify_link (redeem the magic link)",
+      descriptionId: "Mode aksi: send_link (kirim magic link ke email) atau verify_link (verifikasi magic link)"
+    },
+    {
+      name: "email",
+      type: "string",
+      required: true,
+      defaultValue: "kamu@example.com",
+      description: "Alight Motion account email (e.g. kamu@example.com)",
+      descriptionId: "Email akun Alight Motion (contoh: kamu@example.com)"
+    },
+    {
+      name: "magicLink",
+      type: "string",
+      description: "Magic link from the email (required for action=verify_link), e.g. https://nyxieamprem.vercel.app/api/verify?token=...",
+      descriptionId: "Magic link dari email (wajib untuk action=verify_link), contoh: https://nyxieamprem.vercel.app/api/verify?token=..."
+    }
+  ],
+  requestBodySample: {
+    action: "send_link",
+    email: "kamu@example.com",
+    magicLink: "https://nyxieamprem.vercel.app/api/verify?token=abc123"
+  },
+  responseSample: {
+    success: true,
+    action: "send_link",
+    email: "kamu@example.com",
+    data: {
+      success: true,
+      email: "kamu@example.com",
+      message: "link dikirim ke kamu@example.com. cek inbox / spam."
+    },
+    upstream: "https://nyxieamprem.vercel.app/api/send-link",
+    timestamp: "2026-09-20T05:35:17.000Z"
+  }
+};
+
 // src/data/endpoints/tools/index.ts
 var toolsEndpoints = [
   netflixEndpoint,
@@ -885,7 +942,8 @@ var toolsEndpoints = [
   scrapeEndpoint,
   pinterestEndpoint,
   nftokenEndpoint,
-  tiktokDownloaderEndpoint
+  tiktokDownloaderEndpoint,
+  alightMotionEndpoint
 ];
 
 // src/data/endpoints/keys/checklimit.ts
@@ -1415,6 +1473,7 @@ var securitySettings = {
     "/api/tools/netflix": "Free",
     "/api/tools/tiktok": "Free",
     "/api/tools/tiktokdl": "Free",
+    "/api/tools/alightmotion": "Free",
     "/api/tools/stalktiktok": "Free",
     "/api/tools/ttstalk": "Free",
     "/api/data/users": "Free",
@@ -3865,6 +3924,77 @@ ${chosen}`,
   };
   app.get(["/api/tools/tiktok", "/api/tools/tiktokdl"], handleTikTokDownloader);
   app.post(["/api/tools/tiktok", "/api/tools/tiktokdl"], handleTikTokDownloader);
+  const handleAlightMotion = async (req, res) => {
+    try {
+      const action = (req.query.action || req.body?.action || "send_link").toString().trim().toLowerCase();
+      const email = (req.query.email || req.body?.email || "").toString().trim();
+      const magicLink = (req.query.magicLink || req.body?.magicLink || req.query.link || req.body?.link || "").toString().trim();
+      if (!email) {
+        return res.status(400).json({
+          success: false,
+          error: 'Parameter "email" wajib diisi. Contoh: /api/tools/alightmotion?action=send_link&email=kamu@example.com'
+        });
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return res.status(400).json({ success: false, error: "Format email tidak valid." });
+      }
+      const base = "https://nyxieamprem.vercel.app";
+      let upstreamPath;
+      let payload;
+      if (action === "send_link" || action === "send") {
+        upstreamPath = "/api/send-link";
+        payload = { email };
+      } else if (action === "verify_link" || action === "verify") {
+        if (!magicLink) {
+          return res.status(400).json({
+            success: false,
+            error: 'Parameter "magicLink" wajib diisi untuk action=verify_link.'
+          });
+        }
+        upstreamPath = "/api/verify-link";
+        payload = { email, magicLink };
+      } else {
+        return res.status(400).json({
+          success: false,
+          error: "Action tidak valid. Gunakan action=send_link atau action=verify_link."
+        });
+      }
+      const upstreamRes = await fetch(`${base}${upstreamPath}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const rawText = await upstreamRes.text();
+      let data;
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        data = { raw: rawText };
+      }
+      if (!upstreamRes.ok) {
+        return res.status(upstreamRes.status).json({
+          success: false,
+          error: `Upstream HTTP ${upstreamRes.status}`,
+          upstream: data
+        });
+      }
+      return res.json({
+        success: true,
+        action,
+        email,
+        data,
+        upstream: `${base}${upstreamPath}`,
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
+      });
+    } catch (err) {
+      return res.status(500).json({
+        success: false,
+        error: `Gagal memproses AlightMotion: ${err.message || err}`
+      });
+    }
+  };
+  app.get("/api/tools/alightmotion", handleAlightMotion);
+  app.post("/api/tools/alightmotion", handleAlightMotion);
   const scrapeTikTokStalk = async (usernameInput) => {
     const cleanUsername = usernameInput.trim().replace(/^@/, "");
     if (!cleanUsername) {
