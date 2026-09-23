@@ -930,6 +930,46 @@ var alightMotionEndpoint = {
   }
 };
 
+// src/data/endpoints/tools/aio.ts
+var aioDownloaderEndpoint = {
+  id: "tools-aio",
+  name: "All-In-One Downloader",
+  nameId: "All-In-One Downloader",
+  category: "tools",
+  method: "GET",
+  path: "/api/tools/aio",
+  summary: "Auto-detect the platform from any URL and return downloadable media",
+  summaryId: "Deteksi platform otomatis dari URL apa pun dan kembalikan media yang dapat diunduh",
+  description: "Universal media downloader. Just pass a URL and the endpoint detects the platform automatically (TikTok, Instagram, YouTube, Facebook, Twitter/X, Threads, Pinterest, Reddit, Dailymotion, Snapchat, Likee). TikTok uses a native scraper for the best reliability; other platforms try the cobalt.tools service first, then fall back to OpenGraph meta-tag extraction.",
+  descriptionId: "Downloader media universal. Cukup kirim URL dan endpoint akan mendeteksi platform-nya secara otomatis (TikTok, Instagram, YouTube, Facebook, Twitter/X, Threads, Pinterest, Reddit, Dailymotion, Snapchat, Likee). TikTok memakai scraper native yang paling andal; platform lain mencoba layanan cobalt.tools terlebih dahulu, lalu fallback ke ekstraksi meta-tag OpenGraph.",
+  tags: ["Tools", "Downloader", "AIO", "Social Media", "Video", "Universal"],
+  queryParams: [
+    {
+      name: "url",
+      type: "string",
+      required: true,
+      defaultValue: "https://vt.tiktok.com/ZSqJGDDKP/",
+      description: "URL of the post/video to download (any supported platform)",
+      descriptionId: "URL dari post/video yang ingin diunduh (platform apa pun yang didukung)"
+    }
+  ],
+  requestBodySample: {
+    url: "https://www.instagram.com/reel/Cxxxxx/"
+  },
+  responseSample: {
+    success: true,
+    platform: "tiktok",
+    url: "https://vt.tiktok.com/ZSqJGDDKP/",
+    data: {
+      title: "Contoh video TikTok",
+      author: { username: "username", nickname: "Nickname" },
+      download: ["https://v16-webapp.tiktok.com/..."],
+      stats: { diggCount: 1234, commentCount: 56, shareCount: 78 }
+    },
+    timestamp: "2026-09-23T12:00:00.000Z"
+  }
+};
+
 // src/data/endpoints/tools/index.ts
 var toolsEndpoints = [
   netflixEndpoint,
@@ -943,7 +983,8 @@ var toolsEndpoints = [
   pinterestEndpoint,
   nftokenEndpoint,
   tiktokDownloaderEndpoint,
-  alightMotionEndpoint
+  alightMotionEndpoint,
+  aioDownloaderEndpoint
 ];
 
 // src/data/endpoints/keys/checklimit.ts
@@ -1473,6 +1514,7 @@ var securitySettings = {
     "/api/tools/netflix": "Free",
     "/api/tools/tiktok": "Free",
     "/api/tools/tiktokdl": "Free",
+    "/api/tools/aio": "Free",
     "/api/tools/alightmotion": "Free",
     "/api/tools/stalktiktok": "Free",
     "/api/tools/ttstalk": "Free",
@@ -3995,6 +4037,140 @@ ${chosen}`,
   };
   app.get("/api/tools/alightmotion", handleAlightMotion);
   app.post("/api/tools/alightmotion", handleAlightMotion);
+  const handleAIODownloader = async (req, res) => {
+    try {
+      const rawUrl = (req.query.url || req.query.link || req.body?.url || req.body?.link || "").toString().trim();
+      if (!rawUrl) {
+        return res.status(400).json({
+          success: false,
+          error: 'Parameter "url" wajib diisi. Contoh: /api/tools/aio?url=https://vt.tiktok.com/ZSqJGDDKP/'
+        });
+      }
+      let url = rawUrl;
+      if (!/^https?:\/\//i.test(url)) {
+        url = "https://" + url;
+      }
+      let hostname;
+      try {
+        hostname = new URL(url).hostname.toLowerCase();
+      } catch {
+        return res.status(400).json({ success: false, error: "URL tidak valid. Pastikan format URL benar." });
+      }
+      const platform = /tiktok\.com|vt\.tiktok\.com|vm\.tiktok\.com/i.test(hostname) ? "tiktok" : /instagram\.com/i.test(hostname) ? "instagram" : /(youtube\.com|youtu\.be|youtube-nocookie\.com)/i.test(hostname) ? "youtube" : /(facebook\.com|fb\.watch|fb\.com)/i.test(hostname) ? "facebook" : /(twitter\.com|x\.com|t\.co)/i.test(hostname) ? "twitter" : /threads\.net/i.test(hostname) ? "threads" : /(pinterest\.com|pin\.it)/i.test(hostname) ? "pinterest" : /(reddit\.com|redd\.it)/i.test(hostname) ? "reddit" : /(dailymotion\.com|dai\.ly)/i.test(hostname) ? "dailymotion" : /(snapchat\.com|snap\.com)/i.test(hostname) ? "snapchat" : /(likee\.video|likee\.com)/i.test(hostname) ? "likee" : "unknown";
+      if (platform === "unknown") {
+        return res.status(400).json({
+          success: false,
+          error: `Platform tidak dikenali untuk hostname: ${hostname}. Platform yang didukung: TikTok, Instagram, YouTube, Facebook, Twitter/X, Threads, Pinterest, Reddit, Dailymotion, Snapchat, Likee.`,
+          hint: "Kirimkan URL dari platform yang didukung, misalnya /api/tools/aio?url=https://www.instagram.com/reel/xxxx"
+        });
+      }
+      if (platform === "tiktok") {
+        try {
+          const result = await scrapeTikTok(url);
+          return res.json({
+            success: true,
+            platform,
+            url,
+            data: result,
+            timestamp: (/* @__PURE__ */ new Date()).toISOString()
+          });
+        } catch (err) {
+          return res.status(500).json({
+            success: false,
+            platform,
+            error: `Gagal mengunduh media TikTok: ${err.message || err}`,
+            hint: "Coba gunakan endpoint khusus /api/tools/tiktok untuk error yang lebih detail."
+          });
+        }
+      }
+      const aioServices = [
+        { name: "cobalt.tools", build: (u) => `https://api.cobalt.tools/api/json`, method: "POST", headers: { "Content-Type": "application/json", "Accept": "application/json" }, body: (u) => JSON.stringify({ url: u }) }
+      ];
+      const browserUa = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36";
+      const fetchPageMeta = async (u) => {
+        const resp = await fetch(u, {
+          headers: {
+            "User-Agent": browserUa,
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9"
+          },
+          redirect: "follow"
+        });
+        const html = await resp.text();
+        const getMeta = (prop) => {
+          const m = new RegExp(`<meta[^>]*(?:property|name)=["']${prop}["'][^>]*content=["']([^"']*)["']`, "i").exec(html) || new RegExp(`<meta[^>]*content=["']([^"']*)["'][^>]*(?:property|name)=["']${prop}["']`, "i").exec(html);
+          return m ? m[1] : null;
+        };
+        const titleMatch = /<title[^>]*>([^<]*)<\/title>/i.exec(html);
+        return {
+          title: getMeta("og:title") || getMeta("twitter:title") || (titleMatch ? titleMatch[1].trim() : null),
+          description: getMeta("og:description") || getMeta("twitter:description") || getMeta("description"),
+          thumbnail: getMeta("og:image") || getMeta("twitter:image"),
+          video: getMeta("og:video") || getMeta("og:video:url") || getMeta("twitter:player:stream"),
+          author: getMeta("og:video:author") || getMeta("article:author"),
+          pageUrl: getMeta("og:url") || u
+        };
+      };
+      const videoPlatforms = ["instagram", "youtube", "facebook", "twitter", "threads", "reddit", "dailymotion", "snapchat", "likee"];
+      if (videoPlatforms.includes(platform)) {
+        try {
+          const svc = aioServices[0];
+          const resp = await fetch(svc.build(url), {
+            method: svc.method,
+            headers: { ...svc.headers, "User-Agent": browserUa },
+            body: svc.body(url)
+          });
+          const raw = await resp.text();
+          let data;
+          try {
+            data = JSON.parse(raw);
+          } catch {
+            data = { raw };
+          }
+          if (resp.ok && data && (data.status === "stream" || data.status === "redirect" || data.status === "tunnel" || data.status === "picker") && (data.url || data.picker && data.picker.length)) {
+            const media = data.picker && data.picker.length ? data.picker.map((p) => ({ type: p.type || "video", url: p.url })) : [{ type: "video", url: data.url }];
+            return res.json({
+              success: true,
+              platform,
+              url,
+              data: { title: null, media, source: "cobalt.tools", raw: data },
+              timestamp: (/* @__PURE__ */ new Date()).toISOString()
+            });
+          }
+        } catch {
+        }
+      }
+      try {
+        const meta = await fetchPageMeta(url);
+        if (meta.video || meta.thumbnail) {
+          const media = [];
+          if (meta.video) media.push({ type: "video", url: meta.video });
+          if (meta.thumbnail) media.push({ type: "image", url: meta.thumbnail });
+          return res.json({
+            success: true,
+            platform,
+            url,
+            data: { title: meta.title, description: meta.description, author: meta.author, media, source: "meta-tags" },
+            timestamp: (/* @__PURE__ */ new Date()).toISOString()
+          });
+        }
+      } catch {
+      }
+      return res.status(404).json({
+        success: false,
+        platform,
+        error: `Tidak dapat menemukan media yang dapat diunduh dari URL ${platform} ini. Link mungkin privat, telah dihapus, atau memerlukan login.`,
+        hint: "Pastikan link bersifat publik. Untuk TikTok, gunakan /api/tools/tiktok; untuk Pinterest, gunakan /api/tools/pinterest."
+      });
+    } catch (err) {
+      return res.status(500).json({
+        success: false,
+        error: `Gagal memproses AIO downloader: ${err.message || err}`
+      });
+    }
+  };
+  app.get("/api/tools/aio", handleAIODownloader);
+  app.post("/api/tools/aio", handleAIODownloader);
   const scrapeTikTokStalk = async (usernameInput) => {
     const cleanUsername = usernameInput.trim().replace(/^@/, "");
     if (!cleanUsername) {
