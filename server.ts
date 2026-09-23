@@ -3479,10 +3479,23 @@ Anda dapat membuat endpoint REST kustom (\`/api/m/*\`) langsung dari browser:
         });
       }
 
+      // Sanitasi: hapus field sensitif (cookies, msToken, tt_chain_token) dari output AIO
+      const AIO_SENSITIVE_KEYS = ['cookies', 'msToken', 'tt_chain_token', 'ttChainToken', 'x-bogus', 'a_bogus'];
+      const sanitizeAioOutput = (obj: any): any => {
+        if (Array.isArray(obj)) return obj.map(sanitizeAioOutput);
+        if (obj && typeof obj === 'object') {
+          for (const k of Object.keys(obj)) {
+            if (AIO_SENSITIVE_KEYS.includes(k)) { delete obj[k]; continue; }
+            obj[k] = sanitizeAioOutput(obj[k]);
+          }
+        }
+        return obj;
+      };
+
       // TikTok: pakai scraper native yang sudah ada (paling andal)
       if (platform === 'tiktok') {
         try {
-          const result = await scrapeTikTok(url);
+          const result = sanitizeAioOutput(await scrapeTikTok(url));
           return res.json({
             success: true,
             platform,
@@ -3556,7 +3569,7 @@ Anda dapat membuat endpoint REST kustom (\`/api/m/*\`) langsung dari browser:
               success: true,
               platform,
               url,
-              data: { title: null, media, source: 'cobalt.tools', raw: data },
+              data: sanitizeAioOutput({ title: null, media, source: 'cobalt.tools', raw: data }),
               timestamp: new Date().toISOString()
             });
           }
@@ -3576,7 +3589,7 @@ Anda dapat membuat endpoint REST kustom (\`/api/m/*\`) langsung dari browser:
             success: true,
             platform,
             url,
-            data: { title: meta.title, description: meta.description, author: meta.author, media, source: 'meta-tags' },
+            data: sanitizeAioOutput({ title: meta.title, description: meta.description, author: meta.author, media, source: 'meta-tags' }),
             timestamp: new Date().toISOString()
           });
         }

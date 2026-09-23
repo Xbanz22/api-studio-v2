@@ -4064,9 +4064,23 @@ ${chosen}`,
           hint: "Kirimkan URL dari platform yang didukung, misalnya /api/tools/aio?url=https://www.instagram.com/reel/xxxx"
         });
       }
+      const AIO_SENSITIVE_KEYS = ["cookies", "msToken", "tt_chain_token", "ttChainToken", "x-bogus", "a_bogus"];
+      const sanitizeAioOutput = (obj) => {
+        if (Array.isArray(obj)) return obj.map(sanitizeAioOutput);
+        if (obj && typeof obj === "object") {
+          for (const k of Object.keys(obj)) {
+            if (AIO_SENSITIVE_KEYS.includes(k)) {
+              delete obj[k];
+              continue;
+            }
+            obj[k] = sanitizeAioOutput(obj[k]);
+          }
+        }
+        return obj;
+      };
       if (platform === "tiktok") {
         try {
-          const result = await scrapeTikTok(url);
+          const result = sanitizeAioOutput(await scrapeTikTok(url));
           return res.json({
             success: true,
             platform,
@@ -4133,7 +4147,7 @@ ${chosen}`,
               success: true,
               platform,
               url,
-              data: { title: null, media, source: "cobalt.tools", raw: data },
+              data: sanitizeAioOutput({ title: null, media, source: "cobalt.tools", raw: data }),
               timestamp: (/* @__PURE__ */ new Date()).toISOString()
             });
           }
@@ -4150,7 +4164,7 @@ ${chosen}`,
             success: true,
             platform,
             url,
-            data: { title: meta.title, description: meta.description, author: meta.author, media, source: "meta-tags" },
+            data: sanitizeAioOutput({ title: meta.title, description: meta.description, author: meta.author, media, source: "meta-tags" }),
             timestamp: (/* @__PURE__ */ new Date()).toISOString()
           });
         }
