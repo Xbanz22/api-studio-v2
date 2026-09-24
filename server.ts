@@ -3614,6 +3614,165 @@ Anda dapat membuat endpoint REST kustom (\`/api/m/*\`) langsung dari browser:
   app.get('/api/tools/aio', handleAIODownloader);
   app.post('/api/tools/aio', handleAIODownloader);
 
+  // GET /api/tools/tempmail - Temporary Email (mail.tm)
+  // ?action=create              -> buat email baru
+  // ?action=inbox&token=JWT     -> ambil daftar pesan masuk
+  // ?action=read&token=JWT&id=MSG_ID -> baca isi pesan
+  app.get('/api/tools/tempmail', async (req, res) => {
+    const action = ((req.query.action as string) || 'create').toLowerCase().trim();
+    const MAIL_TM_BASE = 'https://api.mail.tm';
+
+    const randomString = (len: number) => crypto.randomBytes(len).toString('base64url').substring(0, len).toLowerCase();
+    const mailTmRequest = async (path: string, options: any = {}) => {
+      const response = await fetch(`${MAIL_TM_BASE}${path}`, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          ...(options.headers || {})
+        }
+      });
+      const text = await response.text();
+      let data: any = null;
+      try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+      return { ok: response.ok, status: response.status, data };
+    };
+
+    try {
+      // 1. CREATE - buat akun email baru
+      if (action === 'create') {
+        const domainsRes = await mailTmRequest('/domains?page=1');
+        const domains = domainsRes.data?.['hydra:member'] || domainsRes.data || [];
+        const domain = Array.isArray(domains) && domains.length > 0
+          ? (domains[0].domain || domains[0])
+          : null;
+
+        if (!domain) {
+          return res.status(503).json({
+            success: false,
+            error: 'Tidak ada domain email sementara yang tersedia saat ini. Coba lagi nanti.'
+          });
+        }
+
+        const address = `${randomString(10)}@${domain}`;
+        const password = randomString(16);
+
+        const createRes = await mailTmRequest('/accounts', {
+          method: 'POST',
+          body: JSON.stringify({ address, password })
+        });
+
+        if (!createRes.ok) {
+          return res.status(createRes.status).json({
+            success: false,
+            error: 'Gagal membuat email sementara.',
+            detail: createRes.data
+          });
+        }
+
+        const tokenRes = await mailTmRequest('/token', {
+          method: 'POST',
+          body: JSON.stringify({ address, password })
+        });
+
+        if (!tokenRes.ok || !tokenRes.data?.token) {
+          return res.status(tokenRes.status).json({
+            success: false,
+            error: 'Akun dibuat tetapi gagal mendapatkan token otentikasi.',
+            detail: tokenRes.data
+          });
+        }
+
+        return res.json({
+          success: true,
+          action: 'create',
+          data: {
+            address,
+            password,
+            token: tokenRes.data.token,
+            id: createRes.data?.id || null
+          },
+          note: 'Simpan token untuk mengecek inbox. Email dan token bersifat sementara.',
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      // 2. INBOX - daftar pesan masuk
+      if (action === 'inbox') {
+        const token = (req.query.token as string) || '';
+        if (!token) {
+          return res.status(400).json({
+            success: false,
+            error: 'Parameter "token" wajib diisi untuk action=inbox. Dapatkan token dari action=create.'
+          });
+        }
+
+        const page = parseInt(req.query.page as string, 10) || 1;
+        const inboxRes = await mailTmRequest(`/messages?page=${page}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        if (!inboxRes.ok) {
+          return res.status(inboxRes.status).json({
+            success: false,
+            error: 'Gagal mengambil inbox. Token mungkin tidak valid atau sudah kedaluwarsa.',
+            detail: inboxRes.data
+          });
+        }
+
+        const messages = inboxRes.data?.['hydra:member'] || inboxRes.data || [];
+        return res.json({
+          success: true,
+          action: 'inbox',
+          count: Array.isArray(messages) ? messages.length : 0,
+          data: messages,
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      // 3. READ - baca isi satu pesan
+      if (action === 'read') {
+        const token = (req.query.token as string) || '';
+        const messageId = (req.query.id as string) || '';
+        if (!token || !messageId) {
+          return res.status(400).json({
+            success: false,
+            error: 'Parameter "token" dan "id" wajib diisi untuk action=read.'
+          });
+        }
+
+        const msgRes = await mailTmRequest(`/messages/${messageId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        if (!msgRes.ok) {
+          return res.status(msgRes.status).json({
+            success: false,
+            error: 'Gagal membaca pesan. Token atau ID pesan tidak valid.',
+            detail: msgRes.data
+          });
+        }
+
+        return res.json({
+          success: true,
+          action: 'read',
+          data: msgRes.data,
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      return res.status(400).json({
+        success: false,
+        error: `Action tidak dikenali: "${action}". Action yang didukung: create, inbox, read.`
+      });
+    } catch (err: any) {
+      return res.status(500).json({
+        success: false,
+        error: `Gagal memproses tempmail: ${err.message || err}`
+      });
+    }
+  });
+
   // GET & POST /api/tools/stalktiktok or /api/tools/ttstalk - TikTok Profile Stalker
   const scrapeTikTokStalk = async (usernameInput: string) => {
     const cleanUsername = usernameInput.trim().replace(/^@/, '');
