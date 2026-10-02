@@ -13,7 +13,7 @@ import * as cheerio from 'cheerio';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import { BUILTIN_ENDPOINTS } from './src/data/endpoints';
-
+import tempmailRouter from './tempmail-routes';
 // Optimize network DNS lookup order in container environment to prevent IPv6 timeouts
 try {
   dns.setDefaultResultOrder('ipv4first');
@@ -5172,72 +5172,99 @@ Anda dapat membuat endpoint REST kustom (\`/api/m/*\`) langsung dari browser:
     }
 
     try {
-      const port = Number(process.env.SMTP_PORT) || 465;
-      const isSecure = process.env.SMTP_SECURE === 'true' || port === 465;
-      const transporter = nodemailer.createTransport({
-        host: smtpHost,
-        port: port,
-        secure: isSecure,
-        auth: {
-          user: smtpUser,
-          pass: smtpPass
-        }
-      });
+  // ===== GMAIL API (HTTPS 443) — bypass SMTP port block =====
+  const { google } = require('googleapis');
 
-      const senderFrom = process.env.SMTP_FROM || `"REST API Studio" <${smtpUser}>`;
-      const timeStr = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
+  const oauth2Client = new google.auth.OAuth2(
+    process.env.GMAIL_CLIENT_ID,
+    process.env.GMAIL_CLIENT_SECRET,
+    'https://developers.google.com/oauthplayground'
+  );
+  oauth2Client.setCredentials({
+    refresh_token: process.env.GMAIL_REFRESH_TOKEN
+  });
 
-      let emailTitle = 'Kode Verifikasi Pendaftaran Akun';
-      let emailSubject = `[REST API Studio] Kode Verifikasi Pendaftaran: ${code}`;
-      let emailDesc = 'Gunakan 6-digit kode keamanan di bawah ini untuk memverifikasi pendaftaran akun developer Anda:';
+  const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
-      if (purpose === 'forgot_password') {
-        emailTitle = 'Reset Kata Sandi Akun';
-        emailSubject = `[REST API Studio] Kode Reset Kata Sandi Anda: ${code}`;
-        emailDesc = 'Anda menerima email ini karena ada permintaan untuk mengatur ulang kata sandi akun Anda. Gunakan kode di bawah ini:';
-      } else if (purpose === 'login_otp') {
-        emailTitle = 'Kode Verifikasi Masuk (OTP)';
-        emailSubject = `[REST API Studio] Kode Verifikasi Masuk: ${code}`;
-        emailDesc = 'Gunakan 6-digit kode di bawah ini untuk masuk ke akun REST API Studio Anda:';
-      }
+  const senderFrom = process.env.SMTP_FROM || `"REST API Studio" <${process.env.GMAIL_USER}>`;
+  const timeStr = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
 
-      await transporter.sendMail({
-        from: senderFrom,
-        to: targetEmail,
-        subject: emailSubject,
-        text: `Halo,\n\n${emailTitle} untuk akun ${targetEmail} adalah: ${code}\n\nKode ini berlaku selama 5 menit. Jangan bagikan kode ini kepada siapapun.\n\nDetail Permintaan:\nWaktu: ${timeStr} WIB\nIP: ${clientIp}\n\nSalam,\nTim REST API Studio`,
-        html: `
-          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 28px 24px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b;">
-            <div style="text-align: center; margin-bottom: 24px;">
-              <div style="display: inline-block; background: linear-gradient(135deg, #4f46e5 0%, #06b6d4 100%); color: white; padding: 10px 20px; border-radius: 12px; font-weight: 800; font-size: 16px; letter-spacing: -0.5px;">
-                ⚡ REST API Studio
-              </div>
-            </div>
-            <h2 style="font-size: 20px; font-weight: 700; text-align: center; margin-bottom: 8px; color: #0f172a;">${emailTitle}</h2>
-            <p style="font-size: 14px; text-align: center; color: #64748b; margin-top: 0;">${emailDesc}</p>
-            
-            <div style="background: #f8fafc; border: 2px dashed #6366f1; border-radius: 14px; padding: 22px; text-align: center; margin: 24px 0;">
-              <span style="font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-size: 36px; font-weight: 900; letter-spacing: 8px; color: #4338ca;">${code}</span>
-            </div>
+  let emailTitle = 'Kode Verifikasi Pendaftaran Akun';
+  let emailSubject = `[REST API Studio] Kode Verifikasi Pendaftaran: ${code}`;
+  let emailDesc = 'Gunakan 6-digit kode keamanan di bawah ini untuk memverifikasi pendaftaran akun developer Anda:';
+  if (purpose === 'forgot_password') {
+    emailTitle = 'Reset Kata Sandi Akun';
+    emailSubject = `[REST API Studio] Kode Reset Kata Sandi Anda: ${code}`;
+    emailDesc = 'Anda menerima email ini karena ada permintaan untuk mengatur ulang kata sandi akun Anda. Gunakan kode di bawah ini:';
+  } else if (purpose === 'login_otp') {
+    emailTitle = 'Kode Verifikasi Masuk (OTP)';
+    emailSubject = `[REST API Studio] Kode Verifikasi Masuk: ${code}`;
+    emailDesc = 'Gunakan 6-digit kode di bawah ini untuk masuk ke akun REST API Studio Anda:';
+  }
 
-            <div style="background-color: #f1f5f9; border-radius: 10px; padding: 12px 16px; margin-bottom: 20px; font-size: 12px; color: #475569;">
-              <p style="margin: 0 0 4px 0;"><strong>Detail Keamanan:</strong></p>
-              <p style="margin: 0 0 2px 0;">• Berlaku: <strong>5 Menit</strong></p>
-              <p style="margin: 0 0 2px 0;">• Waktu Permintaan: <strong>${timeStr} WIB</strong></p>
-              <p style="margin: 0;">• Alamat IP: <strong>${clientIp}</strong></p>
-            </div>
+  const textBody = `Halo,\n\n${emailTitle} untuk akun ${targetEmail} adalah: ${code}\n\nKode ini berlaku selama 5 menit. Jangan bagikan kode ini kepada siapapun.\n\nDetail Permintaan:\nWaktu: ${timeStr} WIB\nIP: ${clientIp}\n\nSalam,\nTim REST API Studio`;
 
-            <p style="font-size: 13px; color: #dc2626; line-height: 1.5; font-weight: 500;">
-              ⚠️ <strong>Peringatan Keamanan:</strong> Jangan pernah memberikan kode ini kepada siapapun termasuk staf kami.
-            </p>
-            
-            <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0;" />
-            <p style="font-size: 11px; color: #94a3b8; text-align: center; line-height: 1.4;">
-              Email ini dikirim otomatis oleh sistem autentikasi REST API Studio. Jika Anda tidak melakukan permintaan ini, abaikan email ini dengan aman.
-            </p>
+  const htmlBody = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 28px 24px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b;">
+        <div style="text-align: center; margin-bottom: 24px;">
+          <div style="display: inline-block; background: linear-gradient(135deg, #4f46e5 0%, #06b6d4 100%); color: white; padding: 10px 20px; border-radius: 12px; font-weight: 800; font-size: 16px; letter-spacing: -0.5px;">
+            ⚡  REST API Studio
           </div>
-        `
-      });
+        </div>
+        <h2 style="font-size: 20px; font-weight: 700; text-align: center; margin-bottom: 8px; color: #0f172a;">${emailTitle}</h2>
+        <p style="font-size: 14px; text-align: center; color: #64748b; margin-top: 0;">${emailDesc}</p>
+        <div style="background: #f8fafc; border: 2px dashed #6366f1; border-radius: 14px; padding: 22px; text-align: center; margin: 24px 0;">
+          <span style="font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-size: 36px; font-weight: 900; letter-spacing: 8px; color: #4338ca;">${code}</span>
+        </div>
+        <div style="background-color: #f1f5f9; border-radius: 10px; padding: 12px 16px; margin-bottom: 20px; font-size: 12px; color: #475569;">
+          <p style="margin: 0 0 4px 0;"><strong>Detail Keamanan:</strong></p>
+          <p style="margin: 0 0 2px 0;">• Berlaku: <strong>5 Menit</strong></p>
+          <p style="margin: 0 0 2px 0;">• Waktu Permintaan: <strong>${timeStr} WIB</strong></p>
+          <p style="margin: 0;">• Alamat IP: <strong>${clientIp}</strong></p>
+        </div>
+        <p style="font-size: 13px; color: #dc2626; line-height: 1.5; font-weight: 500;">
+          ⚠️ <strong>Peringatan Keamanan:</strong> Jangan pernah memberikan kode ini kepada siapapun termasuk staf kami.
+        </p>
+        <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0;" />
+        <p style="font-size: 11px; color: #94a3b8; text-align: center; line-height: 1.4;">
+          Email ini dikirim otomatis oleh sistem autentikasi REST API Studio. Jika Anda tidak melakukan permintaan ini, abaikan email ini dengan aman.
+        </p>
+      </div>
+  `;
+
+  // Build MIME message (RFC 2822) multipart/alternative (text + html)
+  const boundary = '----=_Part_' + Date.now();
+  const mimeMessage = [
+    `From: ${senderFrom}`,
+    `To: ${targetEmail}`,
+    `Subject: ${emailSubject}`,
+    `MIME-Version: 1.0`,
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    ``,
+    `--${boundary}`,
+    `Content-Type: text/plain; charset="UTF-8"`,
+    `Content-Transfer-Encoding: base64`,
+    ``,
+    Buffer.from(textBody, 'utf-8').toString('base64'),
+    `--${boundary}`,
+    `Content-Type: text/html; charset="UTF-8"`,
+    `Content-Transfer-Encoding: base64`,
+    ``,
+    Buffer.from(htmlBody, 'utf-8').toString('base64'),
+    `--${boundary}--`,
+    ``
+  ].join('\r\n');
+
+  const encodedMessage = Buffer.from(mimeMessage)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+
+  await gmail.users.messages.send({
+    userId: 'me',
+    requestBody: { raw: encodedMessage }
+  });
 
       console.log(`[SMTP SUCCESS] ✅ Real email OTP (${purpose}) successfully delivered to ${targetEmail}`);
       return {
@@ -8309,6 +8336,7 @@ export default app;
     res.send(csv);
   });
 
+  app.use('/api/tempmail', tempmailRouter);
   // Fallback 404 for unhandled API routes
   app.all('/api/*', (req, res) => {
     res.status(404).json({
