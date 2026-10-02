@@ -13,7 +13,6 @@ import { tiktokDownloaderEndpoint } from './tiktok';
 import { alightMotionEndpoint } from './alightmotion';
 import { aioDownloaderEndpoint } from './aio';
 
-import { tempmailEndpoints } from './tempmail';
 export const toolsEndpoints: ApiEndpoint[] = [
   netflixEndpoint,
   stalkTiktokEndpoint,
@@ -27,8 +26,7 @@ export const toolsEndpoints: ApiEndpoint[] = [
   nftokenEndpoint,
   tiktokDownloaderEndpoint,
   alightMotionEndpoint,
-  aioDownloaderEndpoint,
-  ...tempmailEndpoints
+  aioDownloaderEndpoint
 ];
 
 export {
