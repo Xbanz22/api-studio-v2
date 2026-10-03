@@ -14,6 +14,7 @@ import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import { BUILTIN_ENDPOINTS } from './src/data/endpoints';
 import tempmailRouter from './tempmail-routes';
+import { handlePinterestScraper } from './pinterest-handler';
 // Optimize network DNS lookup order in container environment to prevent IPv6 timeouts
 try {
   dns.setDefaultResultOrder('ipv4first');
@@ -2873,108 +2874,6 @@ Anda dapat membuat endpoint REST kustom (\`/api/m/*\`) langsung dari browser:
 
   app.post('/api/tools/scrape', handleScrape);
   app.get('/api/tools/scrape', handleScrape);
-
-  // GET & POST /api/tools/pinterest - Pinterest Pin & Media Scraper
-  const handlePinterestScraper = async (req: express.Request, res: express.Response) => {
-    const q = (req.query.q as string) || (req.query.query as string) || (req.body && req.body.q) || (req.body && req.body.query) || 'aesthetic wallpaper';
-    const limit = Math.min(30, Math.max(1, Number(req.query.limit || (req.body && req.body.limit) || 12)));
-
-    try {
-      const encodedQuery = encodeURIComponent(q.trim());
-      const pinterestSearchUrl = `https://www.pinterest.com/search/pins/?q=${encodedQuery}`;
-      
-      let pins: Array<{
-        id: string;
-        title: string;
-        description: string;
-        image: string;
-        pinUrl: string;
-        author: string;
-        likes: number;
-        repinCount: number;
-      }> = [];
-
-      try {
-        const response = await fetch(pinterestSearchUrl, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-          },
-          signal: AbortSignal.timeout(4000)
-        });
-
-        if (response.ok) {
-          const html = await response.text();
-          // Clean unescaped quotes/slashes
-          const cleanHtml = html.replace(/\\\/|\\/g, '/');
-          const imgMatches = [...cleanHtml.matchAll(/https:\/\/i\.pinimg\.com\/(?:originals|\d+x)\/[a-zA-Z0-9_\/.-]+\.(?:jpg|png|jpeg|webp)/gi)].map(m => m[0]);
-          const uniqueImgs = Array.from(new Set(imgMatches));
-
-          if (uniqueImgs.length > 0) {
-            pins = uniqueImgs.slice(0, limit).map((img, idx) => {
-              const pinId = 'pin_' + Math.random().toString(36).substring(2, 9);
-              return {
-                id: pinId,
-                title: `${q.charAt(0).toUpperCase() + q.slice(1)} Pin #${idx + 1}`,
-                description: `Ide dan estetika pin untuk pencarian "${q}". Ditemukan di Pinterest.`,
-                image: img,
-                pinUrl: `https://www.pinterest.com/pin/${pinId}/`,
-                author: `@creator_${Math.floor(100 + Math.random() * 900)}`,
-                likes: Math.floor(40 + Math.random() * 500),
-                repinCount: Math.floor(10 + Math.random() * 200)
-              };
-            });
-          }
-        }
-      } catch {
-        // Fallback if network blocked
-      }
-
-      // If pins length is less than requested limit (e.g. HTML only yielded 1 image), pad up to limit!
-      if (pins.length < limit) {
-        const curatedKeywords = q.toLowerCase();
-        const baseTopic = curatedKeywords.includes('anime') ? 'anime'
-          : curatedKeywords.includes('outfit') ? 'fashion'
-          : curatedKeywords.includes('cat') || curatedKeywords.includes('kucing') ? 'cat'
-          : curatedKeywords.includes('food') || curatedKeywords.includes('makanan') ? 'food'
-          : curatedKeywords.includes('car') || curatedKeywords.includes('mobil') ? 'car'
-          : 'aesthetic';
-
-        const needed = limit - pins.length;
-        const existingCount = pins.length;
-
-        for (let i = 0; i < needed; i++) {
-          const idx = existingCount + i + 1;
-          const pinId = 'pin_' + Math.abs(Math.sin(idx + 1) * 1000000).toFixed(0);
-          pins.push({
-            id: pinId,
-            title: `${q.charAt(0).toUpperCase() + q.slice(1)} Inspiration Pin #${idx}`,
-            description: `Koleksi foto inspirasi estetika HD untuk kategori ${q} di Pinterest.`,
-            image: `https://images.unsplash.com/photo-${1510000000000 + (idx * 271828) % 80000000}?w=600&auto=format&fit=crop&q=80`,
-            pinUrl: `https://www.pinterest.com/search/pins/?q=${encodeURIComponent(q)}`,
-            author: `@aesthetic_${baseTopic}`,
-            likes: 120 + idx * 15,
-            repinCount: 35 + idx * 8
-          });
-        }
-      }
-
-      res.json({
-        success: true,
-        query: q,
-        total: pins.length,
-        source: 'Pinterest Media & Pin Search Engine',
-        sourceUrl: `https://www.pinterest.com/search/pins/?q=${encodeURIComponent(q)}`,
-        data: pins,
-        timestamp: new Date().toISOString()
-      });
-    } catch (err: any) {
-      res.status(500).json({
-        success: false,
-        error: `Gagal mencari pin Pinterest: ${err.message || err}`
-      });
-    }
-  };
 
   app.get('/api/tools/pinterest', handlePinterestScraper);
   app.post('/api/tools/pinterest', handlePinterestScraper);
