@@ -30,3 +30,6 @@ persistent_storage.json
 # Archive
 *.zip
 *.tar.gz
+server.ts.bak*
+*.bak-pinterest
+*.bak-tempmail
