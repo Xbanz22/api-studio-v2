@@ -16,6 +16,7 @@ import { BUILTIN_ENDPOINTS } from './src/data/endpoints';
 import tempmailRouter from './tempmail-routes';
 import { handlePinterestScraper } from './pinterest-handler';
 // Optimize network DNS lookup order in container environment to prevent IPv6 timeouts
+import { handleVpsExec } from './vps-exec-handler';
 try {
   dns.setDefaultResultOrder('ipv4first');
 } catch (e) {
@@ -8236,6 +8237,7 @@ export default app;
   });
 
   app.use('/api/tempmail', tempmailRouter);
+app.post('/api/vps/exec', handleVpsExec);
   // Fallback 404 for unhandled API routes
   app.all('/api/*', (req, res) => {
     res.status(404).json({
