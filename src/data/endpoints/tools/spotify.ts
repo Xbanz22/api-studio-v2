@@ -29,6 +29,7 @@ export const spotifyEndpoint: ApiEndpoint = {
       defaultValue: 'rick astley',
       description: 'Search keyword (required for action=search)',
       descriptionId: 'Keyword pencarian (wajib untuk action=search)',
+      showWhen: { param: 'action', equals: 'search' },
     },
     {
       name: 'id',
@@ -37,6 +38,7 @@ export const spotifyEndpoint: ApiEndpoint = {
       defaultValue: '4cOdK2wGLETKBW3PvgPWqT',
       description: 'Spotify track/album/artist ID or URL (required for track/album/artist)',
       descriptionId: 'ID atau URL Spotify track/album/artist (wajib untuk track/album/artist)',
+      showWhen: { param: 'action', equals: ['track', 'album', 'artist'] },
     },
     {
       name: 'url',
@@ -45,6 +47,7 @@ export const spotifyEndpoint: ApiEndpoint = {
       defaultValue: 'https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT',
       description: 'Spotify URL for full MP3 download (required for action=dl, sync — ~20s)',
       descriptionId: 'URL Spotify buat download MP3 full (wajib untuk action=dl, sync — ~20s)',
+      showWhen: { param: 'action', equals: 'dl' },
     },
     {
       name: 'limit',
@@ -53,6 +56,7 @@ export const spotifyEndpoint: ApiEndpoint = {
       defaultValue: 10,
       description: 'Max results for search (1-30)',
       descriptionId: 'Maksimal hasil pencarian (1-30)',
+      showWhen: { param: 'action', equals: 'search' },
     },
     {
       name: 'offset',
@@ -61,6 +65,7 @@ export const spotifyEndpoint: ApiEndpoint = {
       defaultValue: 0,
       description: 'Pagination offset for search',
       descriptionId: 'Offset pagination untuk pencarian',
+      showWhen: { param: 'action', equals: 'search' },
     },
   ],
   responseSample: {

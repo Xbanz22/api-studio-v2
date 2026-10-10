@@ -1107,7 +1107,7 @@ echo $response;`;
                     Built-in Query Parameters (?key=value)
                   </span>
                   <div className="space-y-2.5">
-                    {endpoint.queryParams.map((param) => {
+                    {endpoint.queryParams.filter((p: any) => !p.showWhen || (queryParams[p.showWhen.param] !== undefined && (Array.isArray(p.showWhen.equals) ? p.showWhen.equals : [p.showWhen.equals]).includes(queryParams[p.showWhen.param]))).map((param) => {
                       const val = queryParams[param.name] ?? '';
                       return (
                         <div

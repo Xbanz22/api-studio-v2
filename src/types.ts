@@ -10,6 +10,7 @@ export interface ApiParam {
   description: string;
   descriptionId?: string;
   options?: string[];
+  showWhen?: { param: string; equals: string | string[] };
 }
 
 export interface ApiEndpoint {
