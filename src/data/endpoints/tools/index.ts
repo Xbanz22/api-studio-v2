@@ -15,6 +15,7 @@ import { aioDownloaderEndpoint } from './aio';
 
 import { tempmailEndpoints } from './tempmail';
 import { spotifyEndpoint } from './spotify';
+import { removebgEndpoint } from './removebg';
 export const toolsEndpoints: ApiEndpoint[] = [
   netflixEndpoint,
   stalkTiktokEndpoint,
@@ -31,6 +32,7 @@ export const toolsEndpoints: ApiEndpoint[] = [
   aioDownloaderEndpoint,
   ...tempmailEndpoints,
   spotifyEndpoint,
+  removebgEndpoint,
 ];
 
 export {
@@ -48,4 +50,5 @@ export {
   alightMotionEndpoint,
   aioDownloaderEndpoint,
   spotifyEndpoint,
+  removebgEndpoint,
 };
