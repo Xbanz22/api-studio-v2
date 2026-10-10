@@ -18,6 +18,8 @@ import { handlePinterestScraper } from './pinterest-handler';
 // Optimize network DNS lookup order in container environment to prevent IPv6 timeouts
 import { handleVpsExec } from './vps-exec-handler';
 import { handleSpotify } from './spotify-handler';
+import multer from 'multer';
+import { handleRemoveBg } from './removebg-handler';
 try {
   dns.setDefaultResultOrder('ipv4first');
 } catch (e) {
@@ -1396,6 +1398,8 @@ process.on('unhandledRejection', (reason) => {
 
 async function startServer() {
   const app = express();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+
   const PORT = Number(process.env.PORT) || 3000;
 
   // Liveness & Readiness health check endpoint
@@ -8240,6 +8244,9 @@ export default app;
   app.use('/api/tempmail', tempmailRouter);
 app.post('/api/vps/exec', handleVpsExec);
 app.all('/api/tools/spotify', handleSpotify);
+app.post('/api/tools/removebg', upload.single('image'), handleRemoveBg);
+app.get('/api/tools/removebg', handleRemoveBg);
+
   // Fallback 404 for unhandled API routes
   app.all('/api/*', (req, res) => {
     res.status(404).json({
